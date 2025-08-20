@@ -1,0 +1,30 @@
+{
+  "name": "wealth-atlas-sync",
+  "version": "1.0.0",
+  "description": "Serverless sync service for Wealth Atlas - AWS Lambda + DynamoDB",
+  "main": "src/handler.js",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy:function": "serverless deploy function",
+    "deploy:prod": "./deploy.sh prod",
+    "remove": "serverless remove",
+    "logs": "serverless logs -f sync",
+    "test": "jest",
+    "test:local": "node test-local.js",
+    "test:api": "./test-api.sh",
+    "local": "serverless offline"
+  },
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-offline": "^13.3.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.420.0",
+    "@aws-sdk/lib-dynamodb": "^3.420.0",
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
