@@ -10,11 +10,11 @@ const { v4: uuidv4 } = require('uuid');
 
 // Initialize DynamoDB client
 const client = new DynamoDBClient({
-  region: process.env.REGION || 'us-east-1',
+  region: process.env.REGION, // Always use the region set by Serverless Framework
 });
 const docClient = DynamoDBDocumentClient.from(client);
 
-const TABLE_NAME = process.env.TABLE_NAME;
+const TABLE_NAME = process.env.TABLE_NAME || 'wealth-atlas-sync-dev';
 
 // CORS headers for all responses
 const CORS_HEADERS = {
