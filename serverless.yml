@@ -6,87 +6,44 @@ provider:
   region: ${opt:region, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
   environment:
-    TABLE_NAME: ${self:custom.tableName}
+    TABLE_NAME: wealth-atlas-sync-${self:provider.stage}
     REGION: ${self:provider.region}
   iamRoleStatements:
     - Effect: Allow
       Action:
-        - dynamodb:GetItem
-        - dynamodb:PutItem
-        - dynamodb:UpdateItem
-        - dynamodb:DeleteItem
-        - dynamodb:Query
-        - dynamodb:Scan
-      Resource: 
-        - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}"
+        - dynamodb:*
+      Resource: "*"
 
-custom:
-  tableName: wealth-atlas-sync-${self:provider.stage}
+plugins:
+  - serverless-plugin-typescript
 
 functions:
   sync:
     handler: src/handler.main
-    timeout: 30
-    memorySize: 256
     events:
       - http:
           path: /data
           method: post
-          cors:
-            origin: '*'
-            headers:
-              - Content-Type
-              - X-Amz-Date
-              - Authorization
-              - X-Api-Key
-              - X-Amz-Security-Token
-            allowCredentials: false
+          cors: true
       - http:
           path: /data/{keyId}
           method: get
-          cors:
-            origin: '*'
-            headers:
-              - Content-Type
-              - X-Amz-Date
-              - Authorization
-              - X-Api-Key
-              - X-Amz-Security-Token
-            allowCredentials: false
+          cors: true
       - http:
           path: /data/{keyId}
           method: put
-          cors:
-            origin: '*'
-            headers:
-              - Content-Type
-              - X-Amz-Date
-              - Authorization
-              - X-Api-Key
-              - X-Amz-Security-Token
-            allowCredentials: false
+          cors: true
       - http:
           path: /data/{keyId}
           method: delete
-          cors:
-            origin: '*'
-            headers:
-              - Content-Type
-              - X-Amz-Date
-              - Authorization
-              - X-Api-Key
-              - X-Amz-Security-Token
-            allowCredentials: false
-
-plugins:
-  - serverless-offline
+          cors: true
 
 resources:
   Resources:
     SyncTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: ${self:custom.tableName}
+        TableName: wealth-atlas-sync-${self:provider.stage}
         AttributeDefinitions:
           - AttributeName: keyId
             AttributeType: S
@@ -94,8 +51,6 @@ resources:
           - AttributeName: keyId
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
-        PointInTimeRecoverySpecification:
-          PointInTimeRecoveryEnabled: true
 
   Outputs:
     ApiEndpoint:
@@ -108,4 +63,4 @@ resources:
             - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
     TableName:
       Description: "DynamoDB Table Name"
-      Value: ${self:custom.tableName}
+      Value: wealth-atlas-sync-${self:provider.stage}

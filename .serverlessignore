@@ -1,0 +1,23 @@
+# Development files
+.git/**
+.gitignore
+README.md
+IMPLEMENTATION.md
+deploy.sh
+
+# TypeScript files (compiled JS will be used)
+src/**/*.ts
+tsconfig.json
+
+# IDE and editor files
+.vscode/**
+.idea/**
+.DS_Store
+
+# Logs and temp files
+*.log
+.env*
+
+# Build artifacts
+.build/**
+.serverless/**
