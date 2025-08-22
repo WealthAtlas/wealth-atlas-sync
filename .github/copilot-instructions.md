@@ -231,7 +231,7 @@ await docClient.send(new UpdateCommand({
 
 ### Scripts Usage
 
-- `pnpm run build` - Build TypeScript to JavaScript for deployment
+- `pnpm run build` - Build and optimize TypeScript to JavaScript for deployment (minified, externalized aws-sdk)
 - `pnpm run deploy` - Deploy to AWS (dev stage by default)
 - `pnpm run deploy:prod` - Deploy to production environment
 - `pnpm run local` - Run serverless offline for local development
@@ -241,10 +241,43 @@ await docClient.send(new UpdateCommand({
 - `./deploy.sh [stage]` - Automated deployment with endpoint extraction
 - `./test-api.sh <endpoint>` - Test deployed API endpoints
 
+### Build Optimization
+
+The build process is optimized for Lambda deployment:
+
+```bash
+# Optimized esbuild configuration
+esbuild src/handler.ts --bundle --platform=node --target=node18 --outdir=dist --minify --external:aws-sdk
+```
+
+Key optimizations:
+- **Minification**: Reduces bundle size significantly
+- **External aws-sdk**: Excludes AWS SDK (available in Lambda runtime)
+- **Bundle size**: Typically ~500KB (well under Lambda limits)
+
+### Deployment Packaging
+
+The serverless configuration excludes unnecessary files:
+
+```yaml
+package:
+  patterns:
+    - '!node_modules/**'
+    - '!src/**'
+    - '!test-*'
+    - '!*.md'
+    - '!.git/**'
+    - '!.github/**'
+    - '!.serverless/**'
+    - 'dist/handler.js'
+```
+
+This ensures only the built handler is deployed, keeping package size minimal.
+
 ### Local Development Workflow
 
 1. **Development** - Test locally with `pnpm run test:local` (no AWS needed)
-2. **Build** - Compile TypeScript with `pnpm run build`
+2. **Build** - Compile and optimize TypeScript with `pnpm run build`
 3. **Deploy** - Deploy to dev with `./deploy.sh`
 4. **Integration Test** - Test endpoints with `./test-api.sh <endpoint>`
 5. **Production** - Deploy to prod with `./deploy.sh prod`
@@ -255,6 +288,8 @@ await docClient.send(new UpdateCommand({
 wealth-atlas-sync/
 ├── src/
 │   └── handler.ts          # Main Lambda handler (TypeScript)
+├── dist/
+│   └── handler.js          # Built and optimized JavaScript (deployment artifact)
 ├── .github/
 │   └── copilot-instructions.md
 ├── serverless.yml          # Infrastructure configuration
@@ -373,6 +408,8 @@ The service implements basic CRUD operations without complex features:
 - Skip input validation for request structure
 - Use hardcoded configuration values
 - Implement complex conflict resolution (keep it last-writer-wins)
+- Bundle aws-sdk in deployment package (use external to reduce size)
+- Include unnecessary files in deployment (use package patterns)
 
 ✅ **Do:**
 
@@ -383,6 +420,49 @@ The service implements basic CRUD operations without complex features:
 - Follow AWS best practices for Lambda and DynamoDB
 - Use environment variables for configuration
 - Log errors without exposing sensitive information
+- Implement proper CORS configuration for web clients
+- Use modern AWS SDK v3 patterns and TypeScript
+- Test both success and error scenarios locally and in integration
+- Optimize build process for minimal deployment package size
+- Use minification and external dependencies for Lambda efficiency
+
+## Deployment Best Practices
+
+### Bundle Size Optimization
+
+Always ensure deployment packages stay under AWS Lambda limits:
+
+- **Bundle Size Target**: Keep under 50MB zipped, 250MB unzipped
+- **Minification**: Always use `--minify` flag in esbuild
+- **External Dependencies**: Exclude aws-sdk and other runtime-available modules
+- **Package Patterns**: Use selective inclusion to avoid unnecessary files
+
+### Common Deployment Issues
+
+1. **Package Too Large Error**:
+   ```
+   Unzipped size must be smaller than 262144000 bytes
+   ```
+   **Solution**: Check build configuration, ensure aws-sdk is external, verify package patterns
+
+2. **Handler Not Found Error**:
+   ```
+   Cannot find module 'src/handler'
+   ```
+   **Solution**: Update serverless.yml handler path to `dist/handler.handler`
+
+3. **Build Failures**:
+   - Ensure TypeScript compiles without errors
+   - Check that all imports are properly resolved
+   - Verify esbuild target matches Lambda runtime
+
+### Deployment Verification
+
+After each deployment:
+1. Run `./test-api.sh <endpoint>` for comprehensive testing
+2. Check CloudWatch logs for any runtime errors
+3. Verify all CRUD operations work correctly
+4. Test error handling scenarios
 - Implement proper CORS configuration for web clients
 - Use modern AWS SDK v3 patterns and TypeScript
 - Test both success and error scenarios locally and in integration
