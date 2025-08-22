@@ -3,23 +3,37 @@ service: wealth-atlas-sync
 provider:
   name: aws
   runtime: nodejs18.x
-  region: ${opt:region, 'us-east-1'}
+  region: us-east-1
   stage: ${opt:stage, 'dev'}
   environment:
-    TABLE_NAME: wealth-atlas-sync-${self:provider.stage}
+    TABLE_NAME: ${self:service}-${self:provider.stage}
     REGION: ${self:provider.region}
   iamRoleStatements:
     - Effect: Allow
       Action:
-        - dynamodb:*
-      Resource: "*"
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: 
+        - !GetAtt SyncTable.Arn
 
-plugins:
-  - serverless-plugin-typescript
+package:
+  patterns:
+    - '!node_modules/**'
+    - '!src/**'
+    - '!test-*'
+    - '!*.md'
+    - '!.git/**'
+    - '!.github/**'
+    - '!.serverless/**'
+    - 'dist/handler.js'
 
 functions:
   sync:
-    handler: src/handler.main
+    handler: dist/handler.handler
+    timeout: 30
+    memorySize: 256
     events:
       - http:
           path: /data
@@ -37,13 +51,17 @@ functions:
           path: /data/{keyId}
           method: delete
           cors: true
+      - http:
+          path: /data/{keyId}
+          method: options
+          cors: true
 
 resources:
   Resources:
     SyncTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: wealth-atlas-sync-${self:provider.stage}
+        TableName: ${self:service}-${self:provider.stage}
         AttributeDefinitions:
           - AttributeName: keyId
             AttributeType: S
@@ -51,6 +69,8 @@ resources:
           - AttributeName: keyId
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
 
   Outputs:
     ApiEndpoint:
@@ -63,4 +83,4 @@ resources:
             - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
     TableName:
       Description: "DynamoDB Table Name"
-      Value: wealth-atlas-sync-${self:provider.stage}
+      Value: ${self:service}-${self:provider.stage}

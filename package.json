@@ -1,29 +1,27 @@
 {
   "name": "wealth-atlas-sync",
   "version": "1.0.0",
-  "description": "Serverless sync service for Wealth Atlas - AWS Lambda + DynamoDB",
-  "main": "src/handler.ts",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node18 --outdir=dist --minify --external:aws-sdk",
     "deploy": "serverless deploy",
-    "deploy:prod": "./deploy.sh prod",
+    "deploy:prod": "serverless deploy --stage prod",
+    "local": "serverless offline",
+    "logs": "serverless logs -f sync",
     "remove": "serverless remove",
-    "logs": "serverless logs -f sync"
+    "test": "jest",
+    "test:local": "node test-local.js",
+    "test:api": "./test-api.sh"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.152",
-    "@types/node": "^24.3.0",
-    "@types/uuid": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.3.0",
     "serverless": "^3.38.0",
-    "serverless-plugin-typescript": "^2.1.5",
-    "typescript": "^5.9.2"
+    "serverless-offline": "^13.0.0"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.420.0",
-    "@aws-sdk/lib-dynamodb": "^3.420.0",
-    "uuid": "^9.0.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
   }
 }

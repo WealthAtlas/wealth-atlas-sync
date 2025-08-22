@@ -1,114 +1,196 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
-} from '@aws-sdk/lib-dynamodb';
-import { v4 as uuidv4 } from 'uuid';
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import * as crypto from "crypto";
 
-// Initialize DynamoDB client
-const client = new DynamoDBClient({ region: process.env.REGION });
+const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
-const TABLE_NAME = process.env.TABLE_NAME || 'wealth-atlas-sync-dev';
 
-// CORS headers
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-  'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-  'Content-Type': 'application/json',
+export const handler = async (event: any) => {
+  const tableName = process.env.TABLE_NAME!;
+
+  try {
+    // POST /data - Create new dataset
+    if (event.httpMethod === "POST" && event.resource === "/data") {
+      return await createData(event, tableName);
+    }
+
+    // GET /data/{keyId} - Retrieve dataset
+    if (event.httpMethod === "GET" && event.resource === "/data/{keyId}") {
+      return await getData(event, tableName);
+    }
+
+    // PUT /data/{keyId} - Update existing dataset
+    if (event.httpMethod === "PUT" && event.resource === "/data/{keyId}") {
+      return await updateData(event, tableName);
+    }
+
+    // DELETE /data/{keyId} - Delete dataset
+    if (event.httpMethod === "DELETE" && event.resource === "/data/{keyId}") {
+      return await deleteData(event, tableName);
+    }
+
+    return response(400, { error: "Unsupported method or path" });
+  } catch (err) {
+    console.error("Handler error:", err);
+    return response(500, { error: "Internal Server Error" });
+  }
 };
 
-// Response helper
-const response = (statusCode: number, body: any): APIGatewayProxyResult => ({
-  statusCode,
-  headers: CORS_HEADERS,
-  body: JSON.stringify(body),
-});
+// Create new dataset
+async function createData(event: any, tableName: string) {
+  try {
+    const body = JSON.parse(event.body || "{}");
+    
+    // Validate required fields
+    if (!body.payload) {
+      return response(400, { error: "payload is required" });
+    }
 
-// CREATE: POST /data
-const createData = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  const { payload, meta } = JSON.parse(event.body!);
-  const keyId = uuidv4();
-  const updatedAt = new Date().toISOString();
+    const keyId = crypto.randomUUID();
+    const version = 1;
+    const updatedAt = new Date().toISOString();
 
-  await docClient.send(new PutCommand({
-    TableName: TABLE_NAME,
-    Item: { keyId, version: 1, payload, meta, updatedAt },
-  }));
+    const item = {
+      keyId,
+      version,
+      payload: body.payload,
+      meta: body.meta || null,
+      updatedAt
+    };
 
-  return response(201, { keyId, version: 1, updatedAt });
-};
+    await docClient.send(
+      new PutCommand({
+        TableName: tableName,
+        Item: item,
+        ConditionExpression: "attribute_not_exists(keyId)"
+      })
+    );
 
-// READ: GET /data/{keyId}
-const getData = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  const { keyId } = event.pathParameters!;
+    return response(201, {
+      keyId,
+      version,
+      updatedAt
+    });
+  } catch (error: any) {
+    if (error.name === "ConditionalCheckFailedException") {
+      return response(409, { error: "Dataset already exists" });
+    }
+    throw error;
+  }
+}
+
+// Get existing dataset
+async function getData(event: any, tableName: string) {
+  const keyId = event.pathParameters?.keyId;
   
-  const result = await docClient.send(new GetCommand({
-    TableName: TABLE_NAME,
-    Key: { keyId },
-  }));
+  if (!keyId) {
+    return response(400, { error: "keyId is required" });
+  }
+
+  const result = await docClient.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: { keyId }
+    })
+  );
 
   if (!result.Item) {
-    return response(404, { error: 'Not found' });
+    return response(404, { error: "Dataset not found" });
   }
 
-  return response(200, result.Item);
-};
+  return response(200, {
+    keyId: result.Item.keyId,
+    version: result.Item.version,
+    payload: result.Item.payload,
+    meta: result.Item.meta,
+    updatedAt: result.Item.updatedAt
+  });
+}
 
-// UPDATE: PUT /data/{keyId}
-const updateData = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  const { keyId } = event.pathParameters!;
-  const { payload, meta } = JSON.parse(event.body!);
-  const updatedAt = new Date().toISOString();
+// Update existing dataset
+async function updateData(event: any, tableName: string) {
+  const keyId = event.pathParameters?.keyId;
+  
+  if (!keyId) {
+    return response(400, { error: "keyId is required" });
+  }
 
-  const result = await docClient.send(new UpdateCommand({
-    TableName: TABLE_NAME,
-    Key: { keyId },
-    UpdateExpression: 'SET version = version + :inc, payload = :payload, meta = :meta, updatedAt = :updatedAt',
-    ExpressionAttributeValues: {
-      ':inc': 1,
-      ':payload': payload,
-      ':meta': meta,
-      ':updatedAt': updatedAt,
-    },
-    ReturnValues: 'ALL_NEW',
-  }));
-
-  return response(200, result.Attributes);
-};
-
-// DELETE: DELETE /data/{keyId}
-const deleteData = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  const { keyId } = event.pathParameters!;
-
-  await docClient.send(new DeleteCommand({
-    TableName: TABLE_NAME,
-    Key: { keyId },
-  }));
-
-  return response(200, { message: 'Deleted', keyId });
-};
-
-// Main handler
-export const main = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    if (event.httpMethod === 'OPTIONS') {
-      return response(200, {});
+    const body = JSON.parse(event.body || "{}");
+    
+    if (!body.payload) {
+      return response(400, { error: "payload is required" });
     }
 
-    switch (event.httpMethod) {
-      case 'POST': return await createData(event);
-      case 'GET': return await getData(event);
-      case 'PUT': return await updateData(event);
-      case 'DELETE': return await deleteData(event);
-      default: return response(405, { error: 'Method not allowed' });
+    const updatedAt = new Date().toISOString();
+
+    const result = await docClient.send(
+      new UpdateCommand({
+        TableName: tableName,
+        Key: { keyId },
+        UpdateExpression: "SET version = version + :inc, payload = :payload, meta = :meta, updatedAt = :updatedAt",
+        ExpressionAttributeValues: {
+          ":inc": 1,
+          ":payload": body.payload,
+          ":meta": body.meta || null,
+          ":updatedAt": updatedAt
+        },
+        ConditionExpression: "attribute_exists(keyId)",
+        ReturnValues: "ALL_NEW"
+      })
+    );
+
+    return response(200, {
+      keyId: result.Attributes!.keyId,
+      version: result.Attributes!.version,
+      updatedAt: result.Attributes!.updatedAt
+    });
+  } catch (error: any) {
+    if (error.name === "ConditionalCheckFailedException") {
+      return response(404, { error: "Dataset not found" });
     }
-  } catch (error) {
-    console.error('Error:', error);
-    return response(500, { error: 'Internal error' });
+    throw error;
   }
-};
+}
+
+// Delete dataset
+async function deleteData(event: any, tableName: string) {
+  const keyId = event.pathParameters?.keyId;
+  
+  if (!keyId) {
+    return response(400, { error: "keyId is required" });
+  }
+
+  try {
+    await docClient.send(
+      new DeleteCommand({
+        TableName: tableName,
+        Key: { keyId },
+        ConditionExpression: "attribute_exists(keyId)"
+      })
+    );
+
+    return response(200, {
+      message: "Dataset deleted successfully",
+      keyId
+    });
+  } catch (error: any) {
+    if (error.name === "ConditionalCheckFailedException") {
+      return response(404, { error: "Dataset not found" });
+    }
+    throw error;
+  }
+}
+
+function response(statusCode: number, body: any) {
+  return {
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS"
+    },
+    body: JSON.stringify(body),
+  };
+}

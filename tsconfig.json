@@ -1,15 +1,14 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020"],
-    "outDir": ".build",
-    "rootDir": "./",
-    "strict": true,
+    "module": "ESNext", 
+    "moduleResolution": "Node",
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "outDir": "dist",
+    "types": ["node"],
+    "lib": ["ES2020"]
   },
-  "exclude": ["node_modules/**/*", ".build/**/*", ".serverless/**/*"]
+  "include": ["src"]
 }

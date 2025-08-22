@@ -1,223 +1,352 @@
-# Wealth Atlas Sync - AWS Lambda Backend
+# Wealth Atlas Sync - Serverless Key-Value Storage API
 
-A serverless sync service for Wealth Atlas using AWS Lambda + DynamoDB.
+A simple, serverless key-value storage API built with AWS Lambda and DynamoDB. Designed for client applications that need to store opaque data blobs with automatic versioning and server-generated keys.
+
+## Overview
+
+This service provides a REST API for storing and retrieving data without any assumptions about the data format or encryption. The server treats all data as opaque and handles key generation, versioning, and timestamps automatically.
+
+### Key Features
+
+- **Server-Generated Keys**: UUID v4 keys generated automatically
+- **Automatic Versioning**: Server increments version on each update
+- **Opaque Data Storage**: Server doesn't inspect or validate data content
+- **No Authentication**: Public API for lightweight use cases
+- **CORS Enabled**: Ready for web client integration
+- **Serverless**: Pay-per-use with AWS Lambda + DynamoDB
 
 ## Architecture
 
-- **AWS Lambda** - Serverless compute for handling API requests
-- **DynamoDB** - NoSQL database for storing encrypted sync data
-- **API Gateway** - RESTful API endpoints with CORS support
-- **Serverless Framework** - Infrastructure as Code deployment
+- **AWS Lambda** - Serverless compute for API handlers
+- **DynamoDB** - NoSQL database for key-value storage with automatic scaling
+- **API Gateway** - RESTful HTTP endpoints with CORS support
+- **Serverless Framework** - Infrastructure as Code deployment and management
 
-## API Endpoints
+## API Reference
 
-All endpoints support CORS and expect/return JSON.
+Base URL: `https://your-api-id.execute-api.us-east-1.amazonaws.com/{stage}`
+
+All endpoints return JSON and include proper CORS headers.
 
 ### POST /data
-Create a new encrypted dataset.
+Create a new dataset with server-generated key.
 
-**Request:**
+**Request Body:**
 ```json
 {
-  "payload": "encrypted_json_string",
+  "payload": "your_data_here",
   "meta": {
-    "enc": "AES-GCM",
-    "kdf": "PBKDF2-SHA256",
-    "iterations": 250000,
-    "salt": "base64_string",
-    "iv": "base64_string",
-    "schemaVersion": 7
+    "optional": "metadata_object"
   }
 }
 ```
 
-**Response (201):**
+**Success Response (201):**
 ```json
 {
-  "keyId": "uuid-v4",
+  "keyId": "550e8400-e29b-41d4-a716-446655440000",
   "version": 1,
-  "updatedAt": "2025-08-20T10:30:00.000Z"
+  "updatedAt": "2025-08-22T14:30:00.000Z"
 }
 ```
+
+**Error Responses:**
+- `400` - Missing required `payload` field
 
 ### GET /data/{keyId}
-Retrieve the latest version of a dataset.
+Retrieve a dataset by its key.
 
-**Response (200):**
+**Success Response (200):**
 ```json
 {
-  "keyId": "uuid-v4",
+  "keyId": "550e8400-e29b-41d4-a716-446655440000",
   "version": 3,
-  "payload": "encrypted_json_string",
+  "payload": "your_data_here",
   "meta": {
-    "enc": "AES-GCM",
-    "kdf": "PBKDF2-SHA256",
-    "iterations": 250000,
-    "salt": "base64_string",
-    "iv": "base64_string",
-    "schemaVersion": 7
+    "optional": "metadata_object"
   },
-  "updatedAt": "2025-08-20T10:35:00.000Z"
+  "updatedAt": "2025-08-22T14:35:00.000Z"
 }
 ```
+
+**Error Responses:**
+- `404` - Dataset not found
 
 ### PUT /data/{keyId}
 Update an existing dataset (increments version).
 
-**Request:** Same as POST
-**Response (200):**
+**Request Body:** Same as POST
+
+**Success Response (200):**
 ```json
 {
-  "keyId": "uuid-v4",
+  "keyId": "550e8400-e29b-41d4-a716-446655440000",
   "version": 4,
-  "updatedAt": "2025-08-20T10:40:00.000Z"
+  "updatedAt": "2025-08-22T14:40:00.000Z"
 }
 ```
+
+**Error Responses:**
+- `400` - Missing required `payload` field
+- `404` - Dataset not found
 
 ### DELETE /data/{keyId}
 Delete a dataset permanently.
 
-**Response (200):**
+**Success Response (200):**
 ```json
 {
   "message": "Dataset deleted successfully",
-  "keyId": "uuid-v4"
+  "keyId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-## Cost Analysis
+**Error Responses:**
+- `404` - Dataset not found
 
-For typical usage (500 requests/month, <10MB data):
+## Quick Start
 
-- **Lambda**: FREE (within free tier: 1M requests + 400K GB-seconds)
-- **DynamoDB**: FREE (within free tier: 25GB storage + 25 RCU/WCU)
-- **API Gateway**: ~$1.75/month (500 requests × $3.50/million)
-- **Total**: ~$1.75/month
+### 1. Install Dependencies
+```bash
+pnpm install
+```
 
-## Deployment
+### 2. Deploy to AWS
+```bash
+# Deploy to development
+./deploy.sh
+
+# Deploy to production  
+./deploy.sh prod
+```
+
+### 3. Test the API
+```bash
+# Test deployed endpoints
+./test-api.sh https://your-api-endpoint.amazonaws.com/dev
+```
+
+## Development
 
 ### Prerequisites
-
-1. **AWS CLI** configured with appropriate permissions
-2. **Node.js 18+** 
-3. **pnpm** package manager
-4. **Serverless Framework**
-
-```bash
-pnpm add -g serverless
-```
-
-### Install Dependencies
-
-```bash
-pnpm install
-```
-
-### Deploy to AWS
-
-```bash
-# Deploy to dev stage (default)
-pnpm run deploy
-
-# Deploy to production
-pnpm run deploy:prod
-```
+- **AWS CLI** configured with deployment permissions
+- **Node.js 18+**
+- **pnpm 9.0.0** (specified in package.json)
+- **Serverless Framework** (`pnpm add -g serverless`)
 
 ### Local Development
-
 ```bash
-# Install dependencies
-pnpm install
+# Build TypeScript
+pnpm run build
 
-# Start local API server
+# Run local API server
 pnpm run local
+# API available at http://localhost:3000/dev/data
+
+# Test locally (without deployment)
+pnpm run test:local
 ```
 
-The API will be available at `http://localhost:3000/dev/data`
-
-### Environment Variables
-
-The Lambda function uses these environment variables (automatically configured):
-
-- `TABLE_NAME` - DynamoDB table name
-- `REGION` - AWS region
-
-### Logs and Monitoring
-
+### Available Scripts
 ```bash
-# View function logs
-pnpm run logs
-
-# Deploy single function (faster)
-pnpm run deploy:function
-
-# Remove entire stack
-pnpm run remove
+pnpm run build        # Build TypeScript to JavaScript
+pnpm run deploy       # Deploy to AWS (dev stage)
+pnpm run deploy:prod  # Deploy to production stage
+pnpm run local        # Start local development server
+pnpm run logs         # View Lambda function logs
+pnpm run remove       # Remove entire stack from AWS
+pnpm run test:local   # Test handler locally with mocks
 ```
 
-## Security Features
+### Testing
+- **Local Testing**: `pnpm run test:local` - Tests handler with mocked DynamoDB
+- **Integration Testing**: `./test-api.sh <endpoint>` - Tests deployed API endpoints
+- **Manual Testing**: Use curl, Postman, or any HTTP client
 
-1. **Client-side Encryption**: All data is encrypted before reaching the server
-2. **CORS Protection**: Properly configured CORS headers
-3. **Input Validation**: Strict validation of crypto metadata
-4. **No Server-side Decryption**: Server never sees unencrypted data
-5. **DynamoDB Encryption**: Data encrypted at rest by AWS
-6. **Point-in-Time Recovery**: Enabled for data protection
+### Environment Configuration
+The service uses stage-based environments:
+- **Development**: `wealth-atlas-sync-dev` (default)
+- **Production**: `wealth-atlas-sync-prod`
 
-## Error Handling
-
-- **400 Bad Request**: Invalid input or missing required fields
-- **404 Not Found**: Dataset doesn't exist
-- **409 Conflict**: Dataset already exists (POST only)
-- **500 Internal Server Error**: Server-side errors
+Environment variables (auto-configured):
+- `TABLE_NAME`: DynamoDB table name with stage suffix
+- `REGION`: AWS region (default: us-east-1)
 
 ## Data Model
 
-### DynamoDB Table Schema
-
+### DynamoDB Schema
 ```
-KeyId (String, Partition Key) - UUID v4 identifier
-Version (Number) - Incremented on each update
-Payload (String) - Encrypted JSON blob
-Meta (Object) - Crypto metadata (non-secret)
-UpdatedAt (String) - ISO timestamp
+Table: wealth-atlas-sync-{stage}
+Partition Key: keyId (String) - UUID v4 identifier
+
+Attributes:
+- keyId: Server-generated UUID v4 (e.g., "550e8400-e29b-41d4-a716-446655440000")
+- version: Auto-incremented number (starts at 1)
+- payload: Your data as string (opaque to server)
+- meta: Optional metadata object (can be null)
+- updatedAt: ISO 8601 timestamp (server-managed)
 ```
 
-### Last-Writer-Wins Conflict Resolution
+### Versioning Strategy
+- **Server-Managed**: Version numbers automatically increment on updates
+- **Last-Writer-Wins**: No conflict resolution - latest update wins
+- **Simple**: No merge logic or client-side conflict handling needed
 
-- Each update increments the version number
-- Clients can compare versions to detect conflicts
-- No automatic conflict resolution - clients handle merging
+### Data Characteristics
+- **Opaque Storage**: Server doesn't validate or interpret payload content
+- **Flexible Metadata**: Optional meta field for any additional data
+- **Size Limits**: Respect DynamoDB item size limits (400KB max)
+- **No Schema**: Payload can contain any string data
 
-## Frontend Integration
+## Client Integration
 
-Update your frontend sync service to use the deployed API:
-
+### JavaScript/TypeScript Example
 ```typescript
-// src/data/sync/config.ts
-export const SYNC_API_BASE_URL = 
-  process.env.NODE_ENV === 'production'
-    ? 'https://your-api-id.execute-api.us-east-1.amazonaws.com/prod'
-    : 'http://localhost:3000/dev';
+class SyncClient {
+  constructor(private baseUrl: string) {}
+
+  async create(payload: string, meta?: any) {
+    const response = await fetch(`${this.baseUrl}/data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload, meta })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    
+    return response.json(); // { keyId, version, updatedAt }
+  }
+
+  async get(keyId: string) {
+    const response = await fetch(`${this.baseUrl}/data/${keyId}`);
+    
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    
+    return response.json(); // { keyId, version, payload, meta, updatedAt }
+  }
+
+  async update(keyId: string, payload: string, meta?: any) {
+    const response = await fetch(`${this.baseUrl}/data/${keyId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload, meta })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    
+    return response.json(); // { keyId, version, updatedAt }
+  }
+
+  async delete(keyId: string) {
+    const response = await fetch(`${this.baseUrl}/data/${keyId}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    
+    return response.json(); // { message, keyId }
+  }
+}
+
+// Usage
+const client = new SyncClient('https://your-api.amazonaws.com/prod');
+const { keyId } = await client.create('{"user": "data"}', { type: 'user_profile' });
+const data = await client.get(keyId);
 ```
 
-## Monitoring and Troubleshooting
+### cURL Examples
+```bash
+# Create new dataset
+curl -X POST https://your-api.amazonaws.com/dev/data \
+  -H "Content-Type: application/json" \
+  -d '{"payload": "hello world", "meta": {"type": "greeting"}}'
 
-### CloudWatch Logs
-All Lambda executions are logged to CloudWatch. View logs via:
-- AWS Console → CloudWatch → Log Groups
-- `npm run logs` command
+# Get dataset  
+curl https://your-api.amazonaws.com/dev/data/YOUR_KEY_ID
 
-### Common Issues
+# Update dataset
+curl -X PUT https://your-api.amazonaws.com/dev/data/YOUR_KEY_ID \
+  -H "Content-Type: application/json" \
+  -d '{"payload": "updated data", "meta": {"version": 2}}'
 
-1. **CORS Errors**: Ensure frontend uses correct API endpoint
-2. **Validation Errors**: Check crypto metadata format
-3. **Timeout**: Increase Lambda timeout if needed (currently 30s)
-4. **Memory**: Increase Lambda memory if needed (currently 256MB)
+# Delete dataset
+curl -X DELETE https://your-api.amazonaws.com/dev/data/YOUR_KEY_ID
+```
 
-### Performance Tuning
+## Security & Operations
 
-For higher loads, consider:
-- **DynamoDB Provisioned Capacity**: More predictable performance
-- **Lambda Provisioned Concurrency**: Reduced cold starts
-- **CloudFront**: Global CDN for API endpoints
+### Security Model
+- **Public API**: No authentication required (by design)
+- **Opaque Data**: Server never inspects or validates payload content
+- **CORS Enabled**: Configured for web client access
+- **AWS Security**: Data encrypted at rest in DynamoDB
+- **Point-in-Time Recovery**: Enabled for data protection
+
+### Cost Estimation
+For typical usage (500 requests/month, <10MB storage):
+- **Lambda**: FREE (within free tier limits)
+- **DynamoDB**: FREE (within free tier limits)  
+- **API Gateway**: ~$1.75/month
+- **Total**: ~$1.75/month
+
+### Monitoring & Troubleshooting
+```bash
+# View Lambda logs
+pnpm run logs
+
+# Monitor via AWS Console
+# CloudWatch → Log Groups → /aws/lambda/wealth-atlas-sync-dev-sync
+```
+
+Common issues:
+- **CORS errors**: Verify endpoint URL in client
+- **404 errors**: Check keyId format and existence
+- **400 errors**: Ensure payload field is present
+- **500 errors**: Check CloudWatch logs
+
+### Performance Characteristics
+- **Cold start**: ~100-500ms for Lambda initialization
+- **Warm requests**: ~10-50ms response time
+- **Throughput**: Scales automatically with demand
+- **Storage**: Unlimited (DynamoDB auto-scaling)
+
+## Project Structure
+```
+├── src/
+│   └── handler.ts          # Main Lambda handler with all endpoints
+├── serverless.yml          # Infrastructure configuration
+├── package.json           # Dependencies and scripts
+├── tsconfig.json          # TypeScript configuration
+├── deploy.sh              # Deployment automation
+├── test-api.sh            # API integration tests
+├── test-local.js          # Local testing with mocks
+└── README.md              # This documentation
+```
+
+## Contributing
+
+### Development Workflow
+1. Make changes to `src/handler.ts`
+2. Test locally: `pnpm run test:local`
+3. Build: `pnpm run build`
+4. Deploy: `./deploy.sh`
+5. Test integration: `./test-api.sh <endpoint>`
+
+### Code Style
+- TypeScript with strict mode enabled
+- ESNext modules with Node.js 18+ target
+- Explicit error handling with proper HTTP status codes
+- Consistent response formats across all endpoints
+
+---
+
+**Note**: This is a simple key-value storage API designed for lightweight use cases. For production applications requiring authentication, advanced features, or high-scale operations, consider more robust solutions.
