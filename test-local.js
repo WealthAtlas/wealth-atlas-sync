@@ -1,4 +1,4 @@
-const { handler } = require('./src/handler');
+const { handler } = require('./dist/handler');
 
 // Mock environment
 process.env.TABLE_NAME = 'test-table';

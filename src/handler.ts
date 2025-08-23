@@ -9,6 +9,16 @@ export const handler = async (event: any) => {
   const tableName = process.env.TABLE_NAME!;
 
   try {
+    // OPTIONS /data - Handle preflight requests for POST
+    if (event.httpMethod === "OPTIONS" && event.resource === "/data") {
+      return response(200, {});
+    }
+
+    // OPTIONS /data/{keyId} - Handle preflight requests for GET/PUT/DELETE
+    if (event.httpMethod === "OPTIONS" && event.resource === "/data/{keyId}") {
+      return response(200, {});
+    }
+
     // POST /data - Create new dataset
     if (event.httpMethod === "POST" && event.resource === "/data") {
       return await createData(event, tableName);

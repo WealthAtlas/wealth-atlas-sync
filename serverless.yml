@@ -40,6 +40,10 @@ functions:
           method: post
           cors: true
       - http:
+          path: /data
+          method: options
+          cors: true
+      - http:
           path: /data/{keyId}
           method: get
           cors: true
